@@ -77,6 +77,12 @@ public class Lox {
         report(line, "", message);
     }
 
+    /**
+     * 报告编译出错的行位置及信息
+     * @param line
+     * @param where
+     * @param message
+     */
     private static void report(int line, String where,
                                String message) {
         System.err.println(

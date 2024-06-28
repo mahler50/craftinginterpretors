@@ -134,7 +134,7 @@ class Scanner {
     }
 
     /**
-     * 匹配char
+     * 匹配双字符 Token
      * @param expected
      * @return
      */
