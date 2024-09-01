@@ -1,12 +1,25 @@
 package com.whn.lox;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.whn.lox.TokenType.*;
 
 /**
  * 以下为该解析器的产生式，优先级顺序从低到高：
- * expression     → equality ;
+ * program        → declaration* EOF ;
+ * declaration    → varDecl
+ *                | statement ;
+ * statement      → exprStmt
+ *                | printStmt ;
+ *                | block ;
+ * block          → "{" declaration* "}" ;
+ * exprStmt       → expression ";" ;
+ * printStmt      → "print" expression ";" ;
+ * varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
+ * expression     → assignment ;
+ * assignment     → IDENTIFIER "=" assignment
+ *                | equality ;
  * equality       → comparison ( ( "!=" | "==" ) comparison )* ;
  * comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
  * term           → factor ( ( "-" | "+" ) factor )* ;
@@ -14,7 +27,8 @@ import static com.whn.lox.TokenType.*;
  * unary          → ( "!" | "-" ) unary
  *                | primary ;
  * primary        → NUMBER | STRING | "true" | "false" | "nil"
- *                | "(" expression ")" ;
+ *                | "(" expression ")"
+ *                | IDENTIFIER ;
  */
 public class Parser {
 
@@ -26,24 +40,107 @@ public class Parser {
         this.tokens = tokens;
     }
 
+
     /**
-     * 解析 Token
+     * 解析 token
      * @return
      */
-    Expr parse() {
+    List<Stmt> parse() {
+        List<Stmt> statements = new ArrayList<>();
+        while (!isAtEnd()) {
+            statements.add(declaration());
+        }
+
+        return statements;
+    }
+
+    /**
+     * 处理声明
+     * @return
+     */
+    private Stmt declaration() {
         try {
-            return expression();
+            if (match(VAR)) return varDeclaration();
+
+            return statement();
         } catch (ParseError error) {
+            synchronize();
             return null;
         }
     }
 
     /**
-     * expression 等同于 equality
+     * 变量声明与初始化
+     * @return
+     */
+    private Stmt varDeclaration() {
+        Token name = consume(IDENTIFIER, "Expect variable name.");
+
+        Expr initializer = null;
+        if (match(EQUAL)) {
+            initializer = expression();
+        }
+
+        consume(SEMICOLON, "Expect ';' after variable declaration");
+        return new Stmt.Var(name, initializer);
+    }
+
+
+
+    private Stmt statement() {
+        if (match(PRINT)) return printStatement();
+        if (match(LEFT_BRACE)) return new Stmt.Block(block());
+
+        return expressionStatement();
+    }
+
+    /**
+     * 处理 print 语句
+     * @return
+     */
+    private Stmt printStatement() {
+        Expr value = expression();
+        consume(SEMICOLON, "Expect ';' after value.");
+        return new Stmt.Print(value);
+    }
+
+    /**
+     * 处理 expression 语句
+     * @return
+     */
+    private Stmt expressionStatement() {
+        Expr expr = expression();
+        consume(SEMICOLON, "Expect ';' after expression.");
+        return new Stmt.Expression(expr);
+    }
+
+    /**
+     * expression 等同于 assignment
      * @return
      */
     private Expr expression() {
-        return equality();
+        return assignment();
+    }
+
+    /**
+     * 赋值表达式解析
+     * @return
+     */
+    private Expr assignment() {
+        Expr expr = equality();
+
+        if (match(EQUAL)) {
+            Token equals = previous();
+            Expr value = assignment();
+
+            if (expr instanceof Expr.Variable) {
+                Token name = ((Expr.Variable)expr).name;
+                return new Expr.Assign(name, value);
+            }
+
+            error(equals, "Invalid assignment target.");
+        }
+        return expr;
     }
 
     /**
@@ -140,6 +237,10 @@ public class Parser {
             return new Expr.Literal(previous().literal);
         }
 
+        if (match(IDENTIFIER)) {
+            return new Expr.Variable(previous());
+        }
+
         if (match(LEFT_PAREN)) {
             Expr expr = expression();
             consume(RIGHT_PAREN, "Expect ')' after expression");
@@ -162,6 +263,20 @@ public class Parser {
     }
 
     /**
+     * 处理 block
+     * @return
+     */
+    private List<Stmt> block() {
+        List<Stmt> statements = new ArrayList<>();
+
+        while (!check(RIGHT_BRACE) && !isAtEnd()) {
+            statements.add(declaration());
+        }
+        consume(RIGHT_BRACE, "Expect '}' after block.");
+        return statements;
+    }
+
+    /**
      * 打印解析时错误
      * @param token
      * @param message
@@ -173,7 +288,7 @@ public class Parser {
     }
 
     /**
-     * 当抛出
+     * 当抛出 ParseError 时， 同步状态到当前语句边界
      */
     private void synchronize() {
         advance();
