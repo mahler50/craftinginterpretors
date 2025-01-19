@@ -1,5 +1,7 @@
 package com.whn.lox;
 
+import java.util.List;
+
 /**
  * 表达式类
  */
@@ -7,9 +9,11 @@ abstract class Expr {
     abstract <R> R accept(Visitor<R> visitor);
 
     interface Visitor<R> {
-        R visitAssignExpr(Expr.Assign expr);
+        R visitAssignExpr(Assign expr);
 
         R visitBinaryExpr(Binary expr);
+
+        R visitCallExpr(Call expr);
 
         R visitGroupingExpr(Grouping expr);
 
@@ -19,7 +23,7 @@ abstract class Expr {
 
         R visitUnaryExpr(Unary expr);
 
-        R visitVariableExpr(Expr.Variable expr);
+        R visitVariableExpr(Variable expr);
 
     }
 
@@ -59,6 +63,26 @@ abstract class Expr {
         <R> R accept(Visitor<R> visitor) {
             return visitor.visitBinaryExpr(this);
         }
+    }
+
+    /**
+     * 函数调用
+     */
+    static class Call extends Expr {
+        Call( Expr callee, Token paren, List<Expr> arguments) {
+            this.callee = callee;
+            this.paren = paren;
+            this.arguments = arguments;
+        }
+
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+            return visitor.visitCallExpr(this);
+        }
+
+        final  Expr callee;
+        final Token paren;
+        final List<Expr> arguments;
     }
 
     /**
